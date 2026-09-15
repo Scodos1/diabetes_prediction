@@ -82,15 +82,10 @@ class DiabetesRiskPredictor:
         proba_high = float(self.model.predict_proba(x_scaled)[0, 1])
         label = "HIGH" if proba_high >= RISK_THRESHOLD else "LOW"
 
-        # For LOW risk, the MVP spec shows the LOW-class probability
-        # (e.g. "Diabetes Risk: LOW / Probability: 18%"), so we report
-        # whichever class was predicted.
-        display_proba = proba_high if label == "HIGH" else (1 - proba_high)
-
         return {
             "label": label,
-            "probability": display_proba,
-            "probability_pct": round(display_proba * 100),
+            "probability": proba_high,
+            "probability_pct": round(proba_high * 100),
             "raw_high_risk_probability": proba_high,
         }
 

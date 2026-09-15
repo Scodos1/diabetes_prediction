@@ -102,6 +102,7 @@ if "roc_curve" in metrics:
     st.subheader("ROC Curve")
     roc = metrics["roc_curve"]
     roc_df = pd.DataFrame({"False Positive Rate": roc["fpr"], "True Positive Rate": roc["tpr"]})
+    roc_df = roc_df.groupby("False Positive Rate", as_index=False)["True Positive Rate"].max()
     roc_df = roc_df.set_index("False Positive Rate")
     st.line_chart(roc_df, color="#0B5FA5")
     st.caption(f"Area under the curve (AUC-ROC): {metrics['auc_roc']:.3f}")

@@ -52,6 +52,8 @@ MVP_FEATURES = ["Age", "Glucose", "BMI", "BloodPressure", "Insulin", "FamilyHist
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 RAW_PATH = os.path.join(DATA_DIR, "pima_raw.csv")
 
+_mvp_dataset_cache = None
+
 
 def download_dataset(force: bool = False) -> str:
     """Download the PIMA Indians Diabetes Dataset to data/pima_raw.csv.
@@ -118,9 +120,13 @@ def get_mvp_dataset():
     actually trained on, so training and the live app use an identical
     feature set.
     """
+    global _mvp_dataset_cache
+    if _mvp_dataset_cache is not None:
+        return _mvp_dataset_cache
     df = clean_and_engineer(load_raw_dataframe())
     X = df[MVP_FEATURES].copy()
     y = df["Outcome"].copy()
+    _mvp_dataset_cache = (X, y)
     return X, y
 
 

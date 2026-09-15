@@ -78,6 +78,21 @@ with st.form("risk_form"):
 # 3. Result Screen
 # ---------------------------------------------------------------------------
 if submitted:
+    warnings = []
+    if glucose < 40 or glucose > 400:
+        warnings.append(f"Glucose level ({glucose} mg/dL) is outside typical clinical range (40-400).")
+    if bmi < 10 or bmi > 80:
+        warnings.append(f"BMI ({bmi}) is outside typical clinical range (10-80).")
+    if blood_pressure < 30 or blood_pressure > 250:
+        warnings.append(f"Blood pressure ({blood_pressure} mm Hg) is outside typical clinical range (30-250).")
+    if insulin < 2 or insulin > 900:
+        warnings.append(f"Insulin level ({insulin} mu U/ml) is outside typical clinical range (2-900).")
+    if glucose == 0 or blood_pressure == 0 or bmi == 0 or insulin == 0:
+        warnings.append("A value of 0 is treated as missing data by the model and may produce unreliable results.")
+    if warnings:
+        for w in warnings:
+            st.warning(w)
+
     with st.spinner("AI is analyzing your data..."):
         result = predictor.predict_risk(
             age=age,

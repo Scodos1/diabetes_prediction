@@ -45,9 +45,9 @@ for r in records:
                 f"Family history: {'Yes' if r['family_history'] else 'No'}"
             )
 
-        if st.button("Generate PDF Report", key=f"pdf_{r['prediction_id']}"):
-            patient = get_patient(r["patient_id"])
-            prediction = get_prediction(r["prediction_id"])
+        patient = get_patient(r["patient_id"])
+        prediction = get_prediction(r["prediction_id"])
+        if patient and prediction:
             pdf_bytes = build_patient_report_pdf(patient, prediction)
             st.download_button(
                 "Download PDF Report",

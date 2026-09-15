@@ -18,6 +18,7 @@ import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from typing import Optional
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "app_data.db")
 
@@ -44,7 +45,7 @@ CREATE TABLE IF NOT EXISTS predictions (
     risk_label                TEXT NOT NULL,
     probability_pct           INTEGER NOT NULL,
     raw_high_risk_probability REAL NOT NULL,
-    FOREIGN KEY (patient_id) REFERENCES patients (patient_id)
+    FOREIGN KEY (patient_id) REFERENCES patients (patient_id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_predictions_patient_id ON predictions (patient_id);
@@ -73,7 +74,7 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def calculate_age(date_of_birth: str, as_of: "date | None" = None) -> int:
+def calculate_age(date_of_birth: str, as_of: "Optional[date]" = None) -> int:
     """Compute whole years of age from an ISO 'YYYY-MM-DD' date_of_birth
     string. Used to derive the Age feature the TabNet model expects
     from the Date of Birth captured at registration.
@@ -125,7 +126,7 @@ def list_patients(search_text: str = "") -> list:
         return [dict(r) for r in rows]
 
 
-def get_patient(patient_id: int) -> dict | None:
+def get_patient(patient_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM patients WHERE patient_id = ?", (patient_id,)
@@ -176,7 +177,7 @@ def get_predictions_for_patient(patient_id: int) -> list:
         return [dict(r) for r in rows]
 
 
-def get_prediction(prediction_id: int) -> dict | None:
+def get_prediction(prediction_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute(
             "SELECT * FROM predictions WHERE prediction_id = ?", (prediction_id,)
