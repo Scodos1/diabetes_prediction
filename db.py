@@ -17,11 +17,25 @@ connection logic in `get_connection()`.
 import os
 import sqlite3
 import logging
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
 log = logging.getLogger(__name__)
+
+MAX_NAME_LENGTH = 100
+MAX_PHONE_LENGTH = 20
+_RATE_LIMIT_WINDOW = 60
+_RATE_LIMIT_MAX_WRITES = 30
+_write_timestamps: list = []
+
+try:
+    import streamlit as st
+    _use_cache = True
+except (ImportError, RuntimeError):
+    _use_cache = False
+
 
 def _cache_read(func):
     """Wrap a DB read function with Streamlit caching when available."""
@@ -34,6 +48,34 @@ def clear_cache():
     """Clear Streamlit's data cache. Call after write operations."""
     if _use_cache:
         st.cache_data.clear()
+
+
+def _check_rate_limit():
+    """Raise if write rate limit is exceeded."""
+    now = time.time()
+    _write_timestamps[:] = [t for t in _write_timestamps if now - t < _RATE_LIMIT_WINDOW]
+    if len(_write_timestamps) >= _RATE_LIMIT_MAX_WRITES:
+        raise RuntimeError(
+            f"Rate limit exceeded: max {_RATE_LIMIT_MAX_WRITES} writes per "
+            f"{_RATE_LIMIT_WINDOW} seconds. Please wait and try again."
+        )
+    _write_timestamps.append(now)
+
+
+def _validate_name(name: str) -> str:
+    """Strip, collapse whitespace, enforce length limit."""
+    name = " ".join(name.split())
+    if len(name) > MAX_NAME_LENGTH:
+        raise ValueError(f"Name must be {MAX_NAME_LENGTH} characters or fewer.")
+    return name
+
+
+def _validate_phone(phone: str) -> str:
+    """Strip and enforce length limit."""
+    phone = phone.strip()
+    if len(phone) > MAX_PHONE_LENGTH:
+        raise ValueError(f"Phone number must be {MAX_PHONE_LENGTH} characters or fewer.")
+    return phone
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "app_data.db")
 
@@ -130,14 +172,17 @@ def register_patient(name: str, date_of_birth: str, gender: str, phone_number: s
     """Insert a new patient record. date_of_birth must be an ISO
     'YYYY-MM-DD' string. Returns the new patient_id.
     """
+    _check_rate_limit()
+    clean_name = _validate_name(name)
+    clean_phone = _validate_phone(phone_number)
     with get_connection() as conn:
         cur = conn.execute(
             "INSERT INTO patients (name, date_of_birth, gender, phone_number, created_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            (name.strip(), date_of_birth, gender, phone_number.strip(), _now()),
+            (clean_name, date_of_birth, gender, clean_phone, _now()),
         )
         patient_id = cur.lastrowid
-        log.info("Registered patient %s (ID: %d)", name.strip(), patient_id)
+        log.info("Registered patient %s (ID: %d)", clean_name, patient_id)
         clear_cache()
         return patient_id
 
@@ -171,6 +216,18 @@ def get_patient(patient_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def delete_patient(patient_id: int) -> bool:
+    """Delete a patient and cascade-delete their predictions. Returns True if deleted."""
+    _check_rate_limit()
+    with get_connection() as conn:
+        cur = conn.execute("DELETE FROM patients WHERE patient_id = ?", (patient_id,))
+        deleted = cur.rowcount > 0
+        if deleted:
+            log.info("Deleted patient %d and cascade-deleted predictions", patient_id)
+            clear_cache()
+        return deleted
+
+
 # ---------------------------------------------------------------------------
 # Module 2 / 3: Prediction storage + History
 # ---------------------------------------------------------------------------
@@ -179,6 +236,7 @@ def save_prediction(patient_id: int, inputs: dict, result: dict) -> int:
     """Persist one prediction run (Module 2 output) so it can appear in
     the History Module (Module 3) and Analytics Dashboard (Module 4).
     """
+    _check_rate_limit()
     with get_connection() as conn:
         cur = conn.execute(
             """

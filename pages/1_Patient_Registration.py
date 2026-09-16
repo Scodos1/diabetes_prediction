@@ -15,7 +15,7 @@ from datetime import date
 
 import streamlit as st
 
-from db import register_patient, list_patients, calculate_age
+from db import register_patient, list_patients, calculate_age, delete_patient, MAX_NAME_LENGTH, MAX_PHONE_LENGTH
 
 PHONE_REGEX = re.compile(r"^[\d\-\+\(\)\s]{7,20}$")
 
@@ -26,7 +26,7 @@ st.markdown(
 )
 
 with st.form("registration_form", clear_on_submit=True):
-    name = st.text_input("Name")
+    name = st.text_input("Name", max_chars=MAX_NAME_LENGTH)
     col1, col2 = st.columns(2)
     with col1:
         date_of_birth = st.date_input(
@@ -37,7 +37,9 @@ with st.form("registration_form", clear_on_submit=True):
         )
     with col2:
         gender = st.selectbox("Gender", ["Female", "Male", "Other"])
-    phone_number = st.text_input("Phone Number", placeholder="e.g. 555-0101")
+    phone_number = st.text_input(
+        "Phone Number", placeholder="e.g. 555-0101", max_chars=MAX_PHONE_LENGTH
+    )
 
     submitted = st.form_submit_button("Register Patient")
 
@@ -52,6 +54,7 @@ if submitted:
         clean_name = " ".join(name.split())
         clean_phone = phone_number.strip()
         patient_id = register_patient(clean_name, date_of_birth.isoformat(), gender, clean_phone)
+        st.toast(f"Registered {clean_name} (ID: {patient_id})", icon="✅")
         st.success(f"Registered **{clean_name}** (Patient ID: {patient_id}).")
         st.page_link(
             "pages/2_Prediction.py",
@@ -84,3 +87,28 @@ else:
         use_container_width=True,
         hide_index=True,
     )
+
+    st.subheader("Delete a Patient")
+    delete_options = {f'{p["name"]} (ID {p["patient_id"]})': p["patient_id"] for p in patients}
+    del_label = st.selectbox("Select patient to delete", list(delete_options.keys()), key="del_patient")
+    if st.button("Delete Patient", type="primary", key="del_btn"):
+        st.session_state["confirm_delete_id"] = delete_options[del_label]
+        st.session_state["confirm_delete_name"] = del_label.split(" (ID")[0]
+
+    if "confirm_delete_id" in st.session_state:
+        pid = st.session_state["confirm_delete_id"]
+        pname = st.session_state["confirm_delete_name"]
+        st.warning(f"Are you sure you want to delete **{pname}** and all their predictions?")
+        c1, c2, _ = st.columns([1, 1, 4])
+        with c1:
+            if st.button("Yes, delete", key="confirm_yes"):
+                delete_patient(pid)
+                del st.session_state["confirm_delete_id"]
+                del st.session_state["confirm_delete_name"]
+                st.toast(f"Deleted {pname}", icon="✅")
+                st.rerun()
+        with c2:
+            if st.button("Cancel", key="confirm_no"):
+                del st.session_state["confirm_delete_id"]
+                del st.session_state["confirm_delete_name"]
+                st.rerun()

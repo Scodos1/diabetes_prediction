@@ -6,8 +6,10 @@ Module 3: History Module
   - Previous predictions, listed newest first
   - Search patient records by name or phone number
   - View/download a PDF report for any past prediction
+  - Export all results as CSV
 """
 
+import pandas as pd
 import streamlit as st
 
 from db import search_history, get_patient, get_prediction
@@ -56,3 +58,29 @@ for r in records:
                 mime="application/pdf",
                 key=f"dl_{r['prediction_id']}",
             )
+
+if records:
+    st.divider()
+    export_df = pd.DataFrame([
+        {
+            "Patient": r["name"],
+            "Gender": r["gender"],
+            "Phone": r["phone_number"],
+            "Age": r["age"],
+            "Glucose": r["glucose"],
+            "BMI": r["bmi"],
+            "Blood Pressure": r["blood_pressure"],
+            "Insulin": r["insulin"],
+            "Family History": "Yes" if r["family_history"] else "No",
+            "Risk": r["risk_label"],
+            "Probability %": r["probability_pct"],
+            "Date": r["created_at"][:10],
+        }
+        for r in records
+    ])
+    st.download_button(
+        "Export All Results as CSV",
+        data=export_df.to_csv(index=False),
+        file_name="prediction_history.csv",
+        mime="text/csv",
+    )

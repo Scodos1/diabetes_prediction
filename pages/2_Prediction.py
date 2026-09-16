@@ -131,6 +131,7 @@ if submitted:
         family_history=(family_history == "Yes"),
     )
     prediction_id = save_prediction(selected_patient_id, inputs, result)
+    st.toast(f"Prediction saved (ID: {prediction_id})", icon="✅")
 
     card_class = "result-high" if result["label"] == "HIGH" else "result-low"
     value_class = "risk-value-high" if result["label"] == "HIGH" else "risk-value-low"

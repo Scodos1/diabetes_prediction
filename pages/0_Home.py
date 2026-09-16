@@ -5,9 +5,12 @@ Landing page: quick overview + at-a-glance stats pulled from the
 Analytics module, with shortcuts into each module.
 """
 
+import os
+import shutil
+
 import streamlit as st
 
-from db import get_analytics_summary
+from db import get_analytics_summary, DB_PATH
 from style import metric_card
 
 st.title("Diabetes Risk Predictor")
@@ -56,3 +59,26 @@ st.caption(
     "This tool provides statistical risk estimates from a machine learning model "
     "and is not a substitute for professional medical diagnosis."
 )
+
+st.divider()
+with st.expander("Database Backup & Restore"):
+    st.caption("Download a backup of the database or restore from a previous backup file.")
+    col_b, col_r = st.columns(2)
+    with col_b:
+        if os.path.exists(DB_PATH):
+            with open(DB_PATH, "rb") as f:
+                st.download_button(
+                    "Download Database Backup",
+                    data=f.read(),
+                    file_name="diabetes_app_backup.db",
+                    mime="application/octet-stream",
+                )
+        else:
+            st.info("No database file found.")
+    with col_r:
+        uploaded = st.file_uploader("Restore from backup", type=["db"])
+        if uploaded is not None:
+            dest = DB_PATH
+            shutil.copy2(uploaded, dest)
+            st.toast("Database restored successfully!", icon="✅")
+            st.rerun()
