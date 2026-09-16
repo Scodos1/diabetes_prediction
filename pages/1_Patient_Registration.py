@@ -10,11 +10,14 @@ going stale. Registered patients then become selectable in the
 Prediction module (Module 2).
 """
 
+import re
 from datetime import date
 
 import streamlit as st
 
 from db import register_patient, list_patients, calculate_age
+
+PHONE_REGEX = re.compile(r"^[\d\-\+\(\)\s]{7,20}$")
 
 st.title("Patient Registration")
 st.markdown(
@@ -43,9 +46,13 @@ if submitted:
         st.error("Please enter the patient's name.")
     elif not phone_number.strip():
         st.error("Please enter a phone number.")
+    elif not PHONE_REGEX.match(phone_number.strip()):
+        st.error("Please enter a valid phone number (7-20 digits, spaces, or dashes).")
     else:
-        patient_id = register_patient(name, date_of_birth.isoformat(), gender, phone_number)
-        st.success(f"Registered **{name}** (Patient ID: {patient_id}).")
+        clean_name = " ".join(name.split())
+        clean_phone = phone_number.strip()
+        patient_id = register_patient(clean_name, date_of_birth.isoformat(), gender, clean_phone)
+        st.success(f"Registered **{clean_name}** (Patient ID: {patient_id}).")
         st.page_link(
             "pages/2_Prediction.py",
             label="Run a risk prediction for this patient →",

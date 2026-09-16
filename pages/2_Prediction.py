@@ -51,25 +51,38 @@ age = calculate_age(patient["date_of_birth"])
 st.caption(f"Date of Birth: {patient['date_of_birth']}  ·  Age: {age}")
 
 # ---------------------------------------------------------------------------
-# 1. Input Form
+# 1. Input Form (with session state persistence)
 # ---------------------------------------------------------------------------
+for key, default in [("glucose", 110.0), ("bmi", 25.0), ("bp", 80.0), ("insulin", 85.0), ("fh", "No")]:
+    if key not in st.session_state:
+        st.session_state[key] = default
+
 with st.form("risk_form"):
     col1, col2 = st.columns(2)
 
     with col1:
         glucose = st.number_input(
-            "Glucose Level (mg/dL)", min_value=0.0, max_value=400.0, value=110.0, step=1.0
+            "Glucose Level (mg/dL)", min_value=0.0, max_value=400.0,
+            value=st.session_state.glucose, step=1.0,
         )
-        bmi = st.number_input("BMI", min_value=0.0, max_value=80.0, value=25.0, step=0.1)
+        bmi = st.number_input(
+            "BMI", min_value=0.0, max_value=80.0,
+            value=st.session_state.bmi, step=0.1,
+        )
         blood_pressure = st.number_input(
-            "Blood Pressure (mm Hg)", min_value=0.0, max_value=250.0, value=80.0, step=1.0
+            "Blood Pressure (mm Hg)", min_value=0.0, max_value=250.0,
+            value=st.session_state.bp, step=1.0,
         )
 
     with col2:
         insulin = st.number_input(
-            "Insulin Level (mu U/ml)", min_value=0.0, max_value=900.0, value=85.0, step=1.0
+            "Insulin Level (mu U/ml)", min_value=0.0, max_value=900.0,
+            value=st.session_state.insulin, step=1.0,
         )
-        family_history = st.radio("Family History of Diabetes", ["No", "Yes"], horizontal=True)
+        family_history = st.radio(
+            "Family History of Diabetes", ["No", "Yes"], horizontal=True,
+            index=0 if st.session_state.fh == "No" else 1,
+        )
 
     # 2. Predict Button
     submitted = st.form_submit_button("Predict Risk")
@@ -78,6 +91,12 @@ with st.form("risk_form"):
 # 3. Result Screen
 # ---------------------------------------------------------------------------
 if submitted:
+    st.session_state.glucose = glucose
+    st.session_state.bmi = bmi
+    st.session_state.bp = blood_pressure
+    st.session_state.insulin = insulin
+    st.session_state.fh = family_history
+
     warnings = []
     if glucose < 40 or glucose > 400:
         warnings.append(f"Glucose level ({glucose} mg/dL) is outside typical clinical range (40-400).")

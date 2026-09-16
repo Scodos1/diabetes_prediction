@@ -15,12 +15,15 @@ exhaustive Grid Search over a smaller, discretized version of the same
 space, so `train_model.py` works either way.
 """
 
+import logging
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from imblearn.over_sampling import SMOTE
 from pytorch_tabnet.tab_model import TabNetClassifier
 import torch
+
+log = logging.getLogger(__name__)
 
 try:
     import optuna
@@ -80,7 +83,7 @@ def _cv_score(params: dict, X: np.ndarray, y: np.ndarray, seed: int = 42,
         proba = clf.predict_proba(X_val)[:, 1]
         score = roc_auc_score(y_val, proba)
         fold_scores.append(score)
-        print(f"    fold {fold_idx + 1}/{N_SPLITS} AUC: {score:.4f}")
+        log.info("    fold %d/%d AUC: %.4f", fold_idx + 1, N_SPLITS, score)
 
     return float(np.mean(fold_scores))
 
@@ -101,7 +104,7 @@ def _optuna_search(X: np.ndarray, y: np.ndarray, n_trials: int, seed: int) -> di
             "batch_size": trial.suggest_categorical("batch_size", [32, 64, 128]),
             "virtual_batch_size": 16,
         }
-        print(f"  [Optuna trial {trial.number}] params={params}")
+        log.info("  [Optuna trial %d] params=%s", trial.number, params)
         return _cv_score(params, X, y, seed=seed)
 
     study = optuna.create_study(
@@ -149,7 +152,7 @@ PARAM_GRID = [
 def _grid_search(X: np.ndarray, y: np.ndarray, seed: int) -> dict:
     results = []
     for i, params in enumerate(PARAM_GRID):
-        print(f"  [Grid Search candidate {i + 1}/{len(PARAM_GRID)}] params={params}")
+        log.info("  [Grid Search candidate %d/%d] params=%s", i + 1, len(PARAM_GRID), params)
         score = _cv_score(params, X, y, seed=seed)
         results.append({"params": params, "value": score})
 
@@ -183,10 +186,10 @@ def tune_hyperparameters(X: np.ndarray, y: np.ndarray, n_trials: int = 15,
     all_trials (full search history, useful for the Results page).
     """
     if OPTUNA_AVAILABLE and not force_grid_search:
-        print(f"Running Optuna search ({n_trials} trials, {N_SPLITS}-fold Stratified CV per trial)...")
+        log.info("Running Optuna search (%d trials, %d-fold Stratified CV per trial)...", n_trials, N_SPLITS)
         return _optuna_search(X, y, n_trials=n_trials, seed=seed)
     else:
         if not OPTUNA_AVAILABLE:
-            print("Optuna not installed — falling back to Grid Search.")
-        print(f"Running Grid Search ({len(PARAM_GRID)} candidates, {N_SPLITS}-fold Stratified CV each)...")
+            log.warning("Optuna not installed - falling back to Grid Search.")
+        log.info("Running Grid Search (%d candidates, %d-fold Stratified CV each)...", len(PARAM_GRID), N_SPLITS)
         return _grid_search(X, y, seed=seed)

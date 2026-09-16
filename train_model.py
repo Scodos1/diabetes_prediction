@@ -33,6 +33,7 @@ Outputs (written to ./model/):
 
 import argparse
 import json
+import logging
 import os
 
 import numpy as np
@@ -53,6 +54,9 @@ import joblib
 
 from data import train_test_splits, fit_scaler, MVP_FEATURES
 from tune import tune_hyperparameters, N_SPLITS
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+log = logging.getLogger(__name__)
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "model")
 MODEL_PATH = os.path.join(MODEL_DIR, "tabnet_diabetes")  # .zip is appended by TabNet
@@ -114,7 +118,7 @@ def main(n_trials: int = 15, seed: int = 42, force_grid_search: bool = False,
     y_tune = pd.concat([y_train, y_val]).reset_index(drop=True).values
 
     if skip_tuning:
-        print("Skipping hyperparameter tuning; using DEFAULT_PARAMS.")
+        log.info("Skipping hyperparameter tuning; using DEFAULT_PARAMS.")
         tuning_result = {
             "method": "skipped",
             "n_trials": 0,
@@ -129,9 +133,9 @@ def main(n_trials: int = 15, seed: int = 42, force_grid_search: bool = False,
         )
 
     best_params = tuning_result["best_params"]
-    print(f"\nBest hyperparameters ({tuning_result['method']}): {best_params}")
+    log.info("Best hyperparameters (%s): %s", tuning_result["method"], best_params)
     if tuning_result["best_cv_auc"] is not None:
-        print(f"Best {N_SPLITS}-fold CV AUC-ROC: {tuning_result['best_cv_auc']:.4f}")
+        log.info("Best %d-fold CV AUC-ROC: %.4f", N_SPLITS, tuning_result["best_cv_auc"])
 
     # ------------------------------------------------------------------
     # Final model: retrain on the full train+val set (SMOTE-balanced)
@@ -140,10 +144,10 @@ def main(n_trials: int = 15, seed: int = 42, force_grid_search: bool = False,
     # ------------------------------------------------------------------
     smote = SMOTE(random_state=seed)
     X_final_bal, y_final_bal = smote.fit_resample(X_tune, y_tune)
-    print(
-        f"\nFinal training set class balance after SMOTE: "
-        f"{np.bincount(y_final_bal.astype(int))} "
-        f"(before: {np.bincount(y_tune.astype(int))})"
+    log.info(
+        "Final training set class balance after SMOTE: %s (before: %s)",
+        np.bincount(y_final_bal.astype(int)),
+        np.bincount(y_tune.astype(int)),
     )
 
     clf = build_classifier(best_params, seed=seed)
@@ -196,10 +200,10 @@ def main(n_trials: int = 15, seed: int = 42, force_grid_search: bool = False,
     with open(METRICS_PATH, "w") as f:
         json.dump(metrics, f, indent=2)
 
-    print(f"\nSaved model to {MODEL_PATH}.zip")
-    print(f"Saved scaler to {SCALER_PATH}")
-    print(f"Saved metrics to {METRICS_PATH}")
-    print("\nOpen the app and visit the Results page to view the confusion matrix and metrics.")
+    log.info("Saved model to %s.zip", MODEL_PATH)
+    log.info("Saved scaler to %s", SCALER_PATH)
+    log.info("Saved metrics to %s", METRICS_PATH)
+    log.info("Open the app and visit the Results page to view the confusion matrix and metrics.")
 
 
 if __name__ == "__main__":

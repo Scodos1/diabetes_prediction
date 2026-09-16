@@ -73,3 +73,17 @@ st.bar_chart(age_risk, color=["#B23A3A", "#2C8050"])
 st.subheader("Average Glucose Level by Risk Level")
 glucose_avg = df.groupby("risk_label", observed=True)["glucose"].mean().reindex(["HIGH", "LOW"])
 st.bar_chart(glucose_avg.rename("Avg Glucose (mg/dL)"), color="#0B5FA5")
+
+st.divider()
+st.subheader("Export Data")
+export_df = df[["name", "gender", "age", "glucose", "bmi", "blood_pressure", "insulin",
+                "family_history", "risk_label", "probability_pct", "created_at"]].copy()
+export_df.columns = ["Name", "Gender", "Age", "Glucose", "BMI", "Blood Pressure",
+                      "Insulin", "Family History", "Risk Label", "Probability %", "Date"]
+csv_data = export_df.to_csv(index=False)
+st.download_button(
+    "Download Predictions as CSV",
+    data=csv_data,
+    file_name="diabetes_predictions.csv",
+    mime="text/csv",
+)

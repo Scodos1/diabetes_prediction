@@ -16,9 +16,24 @@ connection logic in `get_connection()`.
 
 import os
 import sqlite3
+import logging
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional
+
+log = logging.getLogger(__name__)
+
+def _cache_read(func):
+    """Wrap a DB read function with Streamlit caching when available."""
+    if _use_cache:
+        return st.cache_data(show_spinner=False)(func)
+    return func
+
+
+def clear_cache():
+    """Clear Streamlit's data cache. Call after write operations."""
+    if _use_cache:
+        st.cache_data.clear()
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "app_data.db")
 
@@ -55,19 +70,36 @@ CREATE INDEX IF NOT EXISTS idx_patients_name ON patients (name);
 
 @contextmanager
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn = None
     try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         yield conn
         conn.commit()
+    except sqlite3.OperationalError as e:
+        log.error("Database operational error: %s", e)
+        if conn:
+            conn.rollback()
+        raise
+    except Exception as e:
+        log.error("Unexpected database error: %s", e)
+        if conn:
+            conn.rollback()
+        raise
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 
 def init_db():
-    with get_connection() as conn:
-        conn.executescript(SCHEMA)
+    try:
+        with get_connection() as conn:
+            conn.executescript(SCHEMA)
+        log.info("Database initialized at %s", DB_PATH)
+    except sqlite3.OperationalError as e:
+        log.error("Failed to initialize database: %s", e)
+        raise
 
 
 def _now() -> str:
@@ -104,9 +136,13 @@ def register_patient(name: str, date_of_birth: str, gender: str, phone_number: s
             "VALUES (?, ?, ?, ?, ?)",
             (name.strip(), date_of_birth, gender, phone_number.strip(), _now()),
         )
-        return cur.lastrowid
+        patient_id = cur.lastrowid
+        log.info("Registered patient %s (ID: %d)", name.strip(), patient_id)
+        clear_cache()
+        return patient_id
 
 
+@_cache_read
 def list_patients(search_text: str = "") -> list:
     """Return all patients, optionally filtered by name/phone substring
     (case-insensitive), most recently registered first.
@@ -126,6 +162,7 @@ def list_patients(search_text: str = "") -> list:
         return [dict(r) for r in rows]
 
 
+@_cache_read
 def get_patient(patient_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute(
@@ -165,9 +202,13 @@ def save_prediction(patient_id: int, inputs: dict, result: dict) -> int:
                 result["raw_high_risk_probability"],
             ),
         )
-        return cur.lastrowid
+        prediction_id = cur.lastrowid
+        log.info("Saved prediction %d for patient %d (%s)", prediction_id, patient_id, result["label"])
+        clear_cache()
+        return prediction_id
 
 
+@_cache_read
 def get_predictions_for_patient(patient_id: int) -> list:
     with get_connection() as conn:
         rows = conn.execute(
@@ -177,6 +218,7 @@ def get_predictions_for_patient(patient_id: int) -> list:
         return [dict(r) for r in rows]
 
 
+@_cache_read
 def get_prediction(prediction_id: int) -> Optional[dict]:
     with get_connection() as conn:
         row = conn.execute(
@@ -185,6 +227,7 @@ def get_prediction(prediction_id: int) -> Optional[dict]:
         return dict(row) if row else None
 
 
+@_cache_read
 def search_history(search_text: str = "") -> list:
     """Module 3: search patient records by name/phone, joined with
     their prediction history. Returns one row per prediction, newest
@@ -212,6 +255,7 @@ def search_history(search_text: str = "") -> list:
 # Module 4: Analytics Dashboard
 # ---------------------------------------------------------------------------
 
+@_cache_read
 def get_analytics_summary() -> dict:
     """Aggregate counts for the dashboard: total patients screened
     (distinct patients with at least one prediction), high-risk count,
@@ -238,6 +282,7 @@ def get_analytics_summary() -> dict:
         }
 
 
+@_cache_read
 def get_predictions_over_time() -> list:
     """Predictions grouped by calendar day, for a trend chart."""
     with get_connection() as conn:
@@ -254,6 +299,7 @@ def get_predictions_over_time() -> list:
         return [dict(r) for r in rows]
 
 
+@_cache_read
 def get_all_predictions() -> list:
     """All predictions joined with patient info, for analytics charts
     that need per-record detail (e.g. age distribution by risk).
